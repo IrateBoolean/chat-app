@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Chat</title>
+    </head>
+    <body>
+        <h1>WebSocket Chat</h1>
+        <p>Hello {{Username}}</p>
+        <form action="" onsubmit="sendMessage(event)">
+            <label for="Messanger">Your Messange </label>
+            <input type="text" id="messageText" autocomplete="off"/>
+            <button>Send</button>
+        </form>
+        <ul id='messages'>
+        </ul>
+        <script>
+            var ws = new WebSocket("ws://localhost:8000/chat/ws");
+            ws.onmessage = function(event) {
+                var messages = document.getElementById('messages')
+                var message = document.createElement('li')
+                var content = document.createTextNode(event.data)
+                message.appendChild(content)
+                messages.appendChild(message)
+            };
+            function sendMessage(event) {
+                var input = document.getElementById("messageText")
+                const name_q = new URLSearchParams(window.location.search);
+                const name = name_q.get('Username');
+                ws.send([name, input.value])
+                input.value = ''
+                event.preventDefault()
+            }
+        </script>
+    </body>
+</html>
