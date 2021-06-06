@@ -1,11 +1,13 @@
-from fastapi import FastAPI, WebSocket, Form
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.responses import HTMLResponse
-from typing import List, Optional
-from time import sleep
-
-from starlette.requests import Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 app = FastAPI()
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+
 user_list = []
 
 
@@ -19,80 +21,28 @@ async def send_msg_to_all(data, sender=None):
             await sock.send_text(data)
 
 
-html = """
-<!DOCTYPE html>
-<html>
-    <head>
-        <title>Chat</title>
-    </head>
-    <body>
-        <h1>WebSocket Chat</h1>
-        <p>Hello {{Username}}</p>
-        <form action="" onsubmit="sendMessage(event)">
-            <input type="text" id="messageText" autocomplete="off"/>
-            <button>Send</button>
-        </form>
-        <ul id='messages'>
-        </ul>
-        <script>
-            var ws = new WebSocket("ws://localhost:8000/chat/ws");
-            ws.onmessage = function(event) {
-                var messages = document.getElementById('messages')
-                var message = document.createElement('li')
-                var content = document.createTextNode(event.data)
-                message.appendChild(content)
-                messages.appendChild(message)
-            };
-            function sendMessage(event) {
-                var input = document.getElementById("messageText")
-                ws.send(input.value)
-                input.value = ''
-                event.preventDefault()
-            }
-        </script>
-    </body>
-</html>
-"""
-
-
-html_name_input = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
-    <form method="GET" action="http://127.0.0.1:8000/chat">
-        <label for="Username">Your Nickname</label>
-        <input name="Username" id="Username" type="text" value="">
-        <input type="submit">
-    </form>
-</body>
-</html>
-"""
 
 @app.get("/")
-async def get_name(Username: str = None):
-    return HTMLResponse(html_name_input)
+async def get_name(request: Request):
+    return templates.TemplateResponse('index_ask_for_name.html', {"request": request})
 
 
-@app.get("/chat/")
-async def get():
-    return HTMLResponse(html)
+@app.get("/chat")
+async def get(request: Request, Username: str = None):
+    return templates.TemplateResponse('index.html', {"request": request, "Username": Username})
 
 
 @app.websocket("/chat/ws")
 async def websocket_endpoint(sock: WebSocket):
     await sock.accept()
-    Username = 'anymos'
-    print('client accepted: ', Username)
+    print('client accepted: ', sock.client[1])
     user_list.append(sock)
     while True:
         try:
             data = await sock.receive_text()
+            data = data.split(',')
+            Username = data[0]
+            user_msg = data[1]
         except Exception:
             if sock in user_list:
                 user_list.remove(sock)
@@ -101,4 +51,4 @@ async def websocket_endpoint(sock: WebSocket):
                 await send_msg_to_all(data=user_quit)
             break
         else:
-            await send_msg_to_all(sender=Username, data=data)
+            await send_msg_to_all(sender=Username, data=user_msg)
