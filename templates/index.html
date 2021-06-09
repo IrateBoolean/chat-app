@@ -14,7 +14,11 @@
         <ul id='messages'>
         </ul>
         <script>
-            var ws = new WebSocket("ws://localhost:8000/chat/ws");
+            const quary_search = new URLSearchParams(window.location.search)
+            const name = quary_search.get('Username')
+            const room_id = quary_search.get('room_id')
+            var ws = new WebSocket("ws://localhost:8000/chat/ws?" + "name=" + name + "&room_id=" + room_id);
+
             ws.onmessage = function(event) {
                 var messages = document.getElementById('messages')
                 var message = document.createElement('li')
@@ -24,12 +28,11 @@
             };
             function sendMessage(event) {
                 var input = document.getElementById("messageText")
-                const name_q = new URLSearchParams(window.location.search);
-                const name = name_q.get('Username');
-                ws.send([name, input.value])
+
+                ws.send(input.value)
                 input.value = ''
                 event.preventDefault()
-            }
+            };
         </script>
     </body>
 </html>
