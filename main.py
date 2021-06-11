@@ -10,7 +10,7 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-user_list = []
+user_list = {} # {room_id: {user_nameid: online/offline}}
 global_data = {}  # {room_id: {msg_time: {username: msg_itself}}}
 
 
@@ -37,19 +37,22 @@ async def get(request: Request, Username: str = None, room_id: str = None):
 async def websocket_endpoint(sock: WebSocket, query: str = Depends(get_query)):
     await sock.accept()
     print('client accepted: ', sock.client[1])
-    user_list.append(sock)
-
     username, room_id = query
 
-    await download_history_into_page(global_data, room_id, sock)
+    update_user_list(sock, user_list, room_id, username)
+
+
+    await download_history_into_page(sock, global_data, room_id)
 
     while True:
         print('ready to work')
         try:
+            print(user_list)
+            print(global_data)
             user_msg = await sock.receive_text()
             await update_history_into_DB(global_data, room_id, username, user_msg)
-            await send_msg_to_users_in_room(sock, user_list, data=user_msg, user_name=username)
+            await send_msg_to_users_in_room(user_list, room_id, username, user_msg)
         except Exception:
-            await disconnect_user_if_quited(sock, user_list, user_name=username)
+            await disconnect_user_if_quited(sock, user_list, room_id, username)
             break
             
