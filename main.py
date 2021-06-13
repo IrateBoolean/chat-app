@@ -1,21 +1,18 @@
-from fastapi import FastAPI, Request, WebSocket, Query, Depends
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Query, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from typing import Optional
-from fn_library import *
+from typing import Optional, List
+from fn_library import ConnectionManager
 
 
 app = FastAPI()
+manager = ConnectionManager()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-user_list = {} # {room_id: {user_nameid: online/offline}}
-global_data = {}  # {room_id: {msg_time: {username: msg_itself}}}
-
 
 async def get_query(
-    websocket: WebSocket,
     name: Optional[str] = Query(None),
     room_id: Optional[str] = Query(None),
 
@@ -34,25 +31,19 @@ async def get(request: Request, Username: str = None, room_id: str = None):
 
 
 @app.websocket("/chat/ws")
-async def websocket_endpoint(sock: WebSocket, query: str = Depends(get_query)):
-    await sock.accept()
-    print('client accepted: ', sock.client[1])
-    username, room_id = query
+async def websocket_endpoint(websocket: WebSocket, query: str = Depends(get_query)):
+    user_name, room_id = query
+    await manager.connect(user_name, room_id, websocket)
+    await manager.download_history_into_page(room_id, websocket)
 
-    update_user_list(sock, user_list, room_id, username)
-
-
-    await download_history_into_page(sock, global_data, room_id)
-
+    print('ready to work')
     while True:
-        print('ready to work')
+        print(manager.global_data)
         try:
-            print(user_list)
-            print(global_data)
-            user_msg = await sock.receive_text()
-            await update_history_into_DB(global_data, room_id, username, user_msg)
-            await send_msg_to_users_in_room(user_list, room_id, username, user_msg)
-        except Exception:
-            await disconnect_user_if_quited(sock, user_list, room_id, username)
+            user_msg = await websocket.receive_text()
+            await manager.update_history_into_DB(room_id, user_name, user_msg)
+            await manager.broadcast(user_name, room_id, user_msg)
+        except WebSocketDisconnect:
+            await manager.disconnect(user_name, room_id)
             break
             
